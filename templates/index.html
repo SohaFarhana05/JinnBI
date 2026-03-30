@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JINN BI - Data Visualizer</title>
+    <!-- Tailwind CSS for rapid styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- NEW: GridStack for Drag, Drop & Resize -->
+    <link href="https://cdn.jsdelivr.net/npm/gridstack@9.2.2/dist/gridstack.min.css" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/gridstack@9.2.2/dist/gridstack-all.js"></script>
+
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
+        .drag-item { cursor: grab; transition: all 0.2s; }
+        .drag-item:active { cursor: grabbing; }
+        .drop-zone.dragover { background-color: #e2e8f0; border-color: #3b82f6; border-style: solid; }
+        
+        .chat-bubble-user { background-color: #dbeafe; color: #1e3a8a; border-radius: 12px 12px 0 12px; }
+        .chat-bubble-ai { background-color: #f3f4f6; color: #1f2937; border-radius: 12px 12px 12px 0; }
+
+        /* GridStack customizations */
+        .grid-stack-item-content { overflow: hidden !important; }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden text-sm">
+
+    <!-- Top Navigation -->
+    <header class="bg-white border-b border-gray-200 shadow-sm h-14 flex items-center justify-between px-4 shrink-0">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-chart-column text-blue-600 text-xl"></i>
+            <h1 class="font-bold text-gray-800 text-lg">JinnBI</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="saveDashBtn" class="bg-green-50 text-green-600 hover:bg-green-100 px-3 py-1.5 rounded text-sm font-medium border border-green-200 transition-colors" title="Save dashboard to server">
+                <i class="fa-solid fa-floppy-disk"></i> Save Layout
+            </button>
+            <button id="loadDashBtn" class="bg-yellow-50 text-yellow-600 hover:bg-yellow-100 px-3 py-1.5 rounded text-sm font-medium border border-yellow-200 transition-colors mr-4" title="Load dashboard from server">
+                <i class="fa-solid fa-folder-open"></i> Load Layout
+            </button>
+
+            <input type="file" id="fileInput" accept=".csv, .xls, .xlsx" class="hidden">
+            <button onclick="document.getElementById('fileInput').click()" class="bg-blue-600 text-white hover:bg-blue-700 px-4 py-1.5 rounded text-sm font-medium shadow transition-colors">
+                <i class="fa-solid fa-upload mr-1"></i> Upload Dataset
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- Left Pane: Data Fields -->
+        <aside class="w-60 bg-white border-r border-gray-200 flex flex-col shrink-0">
+            <div class="p-3 border-b border-gray-200 bg-gray-50 font-semibold text-gray-700">
+                <i class="fa-solid fa-database mr-1"></i> Data Fields
+            </div>
+            <div id="fieldsList" class="flex-1 overflow-y-auto p-2 space-y-1">
+                <div class="text-gray-400 text-xs text-center mt-4">Upload a dataset to see fields here.</div>
+            </div>
+        </aside>
+
+        <!-- Center Pane: Canvas (Dashboard Area) -->
+        <section class="flex-1 bg-gray-100 p-4 flex flex-col overflow-y-auto relative gap-6">
+            
+            <!-- Custom Dashboard Section -->
+            <div class="flex flex-col gap-2 relative min-h-[400px]">
+                <div class="flex items-center justify-between">
+                    <h2 class="font-bold text-gray-700 text-lg flex items-center">
+                        <i class="fa-solid fa-chart-line mr-2 text-blue-600"></i> My Custom Dashboard
+                    </h2>
+                    <button id="clearDashBtn" class="text-xs text-red-600 hover:underline hidden"><i class="fa-solid fa-trash mr-1"></i>Clear Dashboard</button>
+                </div>
+                
+                <!-- NEW: GridStack Container -->
+                <div class="grid-stack w-full bg-gray-100 min-h-[300px]" id="customChartsGrid"></div>
+                
+                <div id="emptyCanvasMsg" class="absolute inset-0 top-10 flex flex-col items-center justify-center text-gray-400 pointer-events-none z-0">
+                    <i class="fa-regular fa-chart-bar text-4xl mb-2"></i>
+                    <span>Drag fields in the right panel and click "Add Chart"</span>
+                </div>
+            </div>
+
+            <!-- AI Dashboard Container (4 Charts) -->
+            <div id="aiDashboardContainer" class="hidden flex flex-col gap-4 mb-10 pt-4 border-t-2 border-dashed border-gray-300">
+                <div class="font-medium text-gray-700 bg-white p-3 border border-gray-200 rounded shadow-sm flex items-center">
+                    <i class="fa-solid fa-robot text-purple-600 mr-2 text-xl"></i> 
+                    <div>
+                        <div class="text-base font-bold text-gray-800">AI Generated Dashboard</div>
+                        <div class="text-xs text-gray-500 font-normal">Automatically designed based on your dataset</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white p-4 shadow-sm border border-gray-200 rounded min-h-[300px] flex flex-col">
+                        <div id="aiChartTitle1" class="text-sm font-semibold text-center mb-2 text-gray-700"></div>
+                        <div class="flex-1 relative w-full flex items-center justify-center"><canvas id="aiChart1"></canvas></div>
+                    </div>
+                    <div class="bg-white p-4 shadow-sm border border-gray-200 rounded min-h-[300px] flex flex-col">
+                        <div id="aiChartTitle2" class="text-sm font-semibold text-center mb-2 text-gray-700"></div>
+                        <div class="flex-1 relative w-full flex items-center justify-center"><canvas id="aiChart2"></canvas></div>
+                    </div>
+                    <div class="bg-white p-4 shadow-sm border border-gray-200 rounded min-h-[300px] flex flex-col">
+                        <div id="aiChartTitle3" class="text-sm font-semibold text-center mb-2 text-gray-700"></div>
+                        <div class="flex-1 relative w-full flex items-center justify-center"><canvas id="aiChart3"></canvas></div>
+                    </div>
+                    <div class="bg-white p-4 shadow-sm border border-gray-200 rounded min-h-[300px] flex flex-col">
+                        <div id="aiChartTitle4" class="text-sm font-semibold text-center mb-2 text-gray-700"></div>
+                        <div class="flex-1 relative w-full flex items-center justify-center"><canvas id="aiChart4"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Pane: Visualizations & Chat -->
+        <aside class="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0">
+            
+            <!-- Visualization Setup -->
+            <div class="flex-1 flex flex-col border-b border-gray-200">
+                <div class="p-3 border-b border-gray-200 bg-gray-50 font-semibold text-gray-700">
+                    <i class="fa-solid fa-sliders mr-1"></i> Visualizations
+                </div>
+                <div class="p-4 space-y-4 flex-1 overflow-y-auto">
+                    
+                    <!-- Chart Type Selection -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 mb-2 uppercase">Chart Type</label>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button class="chart-type-btn p-2 border border-blue-500 bg-blue-50 text-blue-600 rounded flex justify-center items-center" data-type="bar" title="Bar Chart"><i class="fa-solid fa-chart-simple text-lg"></i></button>
+                            <button class="chart-type-btn p-2 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded flex justify-center items-center" data-type="line" title="Line Chart"><i class="fa-solid fa-chart-line text-lg"></i></button>
+                            <button class="chart-type-btn p-2 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded flex justify-center items-center" data-type="pie" title="Pie Chart"><i class="fa-solid fa-chart-pie text-lg"></i></button>
+                            <button class="chart-type-btn p-2 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded flex justify-center items-center" data-type="doughnut" title="Doughnut Chart"><i class="fa-solid fa-circle-notch text-lg"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Drop Zones -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">X-Axis (Category)</label>
+                        <div id="xAxisZone" class="drop-zone border-2 border-dashed border-gray-300 rounded p-2 min-h-[40px] flex flex-wrap gap-1 items-center bg-gray-50 transition-colors">
+                            <span class="text-gray-400 text-xs pointer-events-none w-full text-center drop-text">Drop field here</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">Y-Axis (Value to Sum)</label>
+                        <div id="yAxisZone" class="drop-zone border-2 border-dashed border-gray-300 rounded p-2 min-h-[40px] flex flex-wrap gap-1 items-center bg-gray-50 transition-colors">
+                            <span class="text-gray-400 text-xs pointer-events-none w-full text-center drop-text">Drop field here</span>
+                        </div>
+                    </div>
+                    
+                    <button id="addChartBtn" class="w-full bg-blue-600 text-white px-3 py-2.5 rounded shadow hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 font-medium mt-2">
+                        <i class="fa-solid fa-plus"></i> Add Chart to Dashboard
+                    </button>
+                    
+                </div>
+            </div>
+
+            <!-- AI Insights Chat -->
+            <div class="h-1/2 flex flex-col bg-gray-50">
+                <div class="p-3 border-b border-gray-200 bg-white font-semibold text-gray-700 flex justify-between items-center">
+                    <span><i class="fa-solid fa-wand-magic-sparkles text-purple-600 mr-1"></i> AI Insights</span>
+                    <div class="flex gap-2">
+                        <button id="autoInsightBtn" class="text-xs text-purple-600 hover:underline">Get Summary</button>
+                        <button id="generateDashBtn" class="text-xs text-white bg-purple-600 px-2 py-1 rounded shadow-sm hover:bg-purple-700 transition-colors flex items-center gap-1">
+                            <i class="fa-solid fa-layer-group"></i> Auto Dash
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="chatHistory" class="flex-1 overflow-y-auto p-3 space-y-3 bg-white">
+                    <div class="chat-bubble-ai p-3 text-sm border border-gray-100 shadow-sm">
+                        Hello! Upload a dataset, build a dashboard above, or ask me to generate a 4-chart auto-dashboard!
+                    </div>
+                </div>
+
+                <div class="p-3 bg-white border-t border-gray-200">
+                    <div class="flex gap-2 relative">
+                        <input type="text" id="chatInput" placeholder="Ask about your data..." class="flex-1 border border-gray-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500">
+                        <button id="sendChatBtn" class="bg-purple-600 text-white h-9 w-9 rounded-full flex items-center justify-center hover:bg-purple-700 transition-colors shrink-0">
+                            <i class="fa-solid fa-paper-plane text-xs relative -ml-0.5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </aside>
+
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex flex-col items-center justify-center hidden">
+        <i class="fa-solid fa-circle-notch fa-spin text-white text-5xl mb-4"></i>
+        <div class="text-white text-lg font-semibold" id="loadingText">Processing Data...</div>
+    </div>
+
+    <script>
+        // --- State Management ---
+        let currentData = [];
+        let dataSummaryContext = "";
+        let selectedChartType = 'bar';
+        
+        let customDashConfigs = []; // Stores the exact data configs { id, chart_type, x_axis, y_axis, title }
+        let customChartInstances = {}; // Chart.js instances mapped to ID
+        let aiChartInstances = [];
+
+        // Initialize GridStack
+        let grid = GridStack.init({
+            cellHeight: 120,
+            margin: 10,
+            resizable: { handles: 'e, se, s, sw, w' },
+            draggable: { handle: '.drag-handle' },
+            column: 12
+        });
+
+        // --- DOM Elements ---
+        const fileInput = document.getElementById('fileInput');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
+        const fieldsList = document.getElementById('fieldsList');
+        
+        const xAxisZone = document.getElementById('xAxisZone');
+        const yAxisZone = document.getElementById('yAxisZone');
+        
+        const addChartBtn = document.getElementById('addChartBtn');
+        const clearDashBtn = document.getElementById('clearDashBtn');
+        const emptyCanvasMsg = document.getElementById('emptyCanvasMsg');
+        
+        const saveDashBtn = document.getElementById('saveDashBtn');
+        const loadDashBtn = document.getElementById('loadDashBtn');
+
+        const chatInput = document.getElementById('chatInput');
+        const sendChatBtn = document.getElementById('sendChatBtn');
+        const chatHistory = document.getElementById('chatHistory');
+        const autoInsightBtn = document.getElementById('autoInsightBtn');
+        const generateDashBtn = document.getElementById('generateDashBtn');
+        const aiDashboardContainer = document.getElementById('aiDashboardContainer');
+
+        // --- File Upload Logic ---
+        fileInput.addEventListener('change', async (e) => {
+            if (!e.target.files.length) return;
+            const file = e.target.files[0];
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            showLoading('Analyzing Dataset...');
+
+            try {
+                const res = await fetch('/upload', { method: 'POST', body: formData });
+                const json = await res.json();
+
+                if (res.ok) {
+                    currentData = json.data;
+                    dataSummaryContext = json.summary;
+                    renderFields(json.columns);
+                    
+                    addChatBubble('System', `Successfully loaded ${file.name} with ${json.columns.length} columns. Layout will adapt automatically if fields match.`);
+                    
+                    if(customDashConfigs.length > 0) {
+                        rebuildCustomChartsContent();
+                    }
+                } else {
+                    alert(json.error || 'Failed to upload file.');
+                }
+            } catch (err) {
+                alert('Error uploading file: ' + err.message);
+            } finally {
+                hideLoading();
+                fileInput.value = '';
+            }
+        });
+
+        // --- Drag & Drop Interface for Fields ---
+        function renderFields(columns) {
+            fieldsList.innerHTML = '';
+            columns.forEach(col => {
+                const el = document.createElement('div');
+                el.className = 'drag-item bg-white border border-gray-200 rounded p-2 text-gray-700 shadow-sm hover:shadow hover:border-blue-300 flex items-center';
+                el.draggable = true;
+                el.innerHTML = `<i class="fa-solid fa-grip-vertical text-gray-400 mr-2"></i> ${col}`;
+                el.dataset.field = col;
+                
+                el.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', col); });
+                fieldsList.appendChild(el);
+            });
+        }
+
+        function setupDropZone(zone) {
+            zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+            zone.addEventListener('dragleave', () => { zone.classList.remove('dragover'); });
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                const fieldName = e.dataTransfer.getData('text/plain');
+                if (fieldName) {
+                    zone.innerHTML = `
+                        <div class="bg-blue-100 text-blue-800 px-2 py-1 rounded border border-blue-200 flex items-center gap-2 text-xs w-full justify-between">
+                            <span class="truncate font-medium field-val" data-field="${fieldName}">${fieldName}</span>
+                            <i class="fa-solid fa-xmark cursor-pointer hover:text-red-500" onclick="clearZone(this.parentElement.parentElement)"></i>
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        window.clearZone = (zone) => {
+            zone.innerHTML = `<span class="text-gray-400 text-xs pointer-events-none w-full text-center drop-text">Drop field here</span>`;
+        };
+
+        setupDropZone(xAxisZone);
+        setupDropZone(yAxisZone);
+
+        // --- Chart Type Selection ---
+        document.querySelectorAll('.chart-type-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.chart-type-btn').forEach(b => {
+                    b.classList.remove('border-blue-500', 'bg-blue-50', 'text-blue-600');
+                    b.classList.add('border-gray-200', 'text-gray-600', 'hover:bg-gray-50');
+                });
+                const target = e.currentTarget;
+                target.classList.remove('border-gray-200', 'text-gray-600', 'hover:bg-gray-50');
+                target.classList.add('border-blue-500', 'bg-blue-50', 'text-blue-600');
+                selectedChartType = target.dataset.type;
+            });
+        });
+
+        function getZoneField(zone) {
+            const span = zone.querySelector('.field-val');
+            return span ? span.dataset.field : null;
+        }
+
+        // --- GridStack Custom Dashboard Logic ---
+        addChartBtn.addEventListener('click', () => {
+            if (currentData.length === 0) return alert('Please upload data first.');
+            
+            const xField = getZoneField(xAxisZone);
+            const yField = getZoneField(yAxisZone);
+            if (!xField || !yField) return alert('Please drop fields into both X-Axis and Y-Axis.');
+
+            const config = {
+                id: 'chart_' + Date.now(),
+                chart_type: selectedChartType,
+                x_axis: xField,
+                y_axis: yField,
+                title: `${yField} by ${xField}`
+            };
+
+            customDashConfigs.push(config);
+            addWidgetToGrid(config, { w: 6, h: 3 }); // default size
+            updateCanvasMessage();
+        });
+
+        clearDashBtn.addEventListener('click', () => {
+            if(confirm("Are you sure you want to clear your custom dashboard?")) {
+                customDashConfigs = [];
+                Object.values(customChartInstances).forEach(inst => inst.destroy());
+                customChartInstances = {};
+                grid.removeAll();
+                updateCanvasMessage();
+            }
+        });
+
+        window.removeCustomChart = (id) => {
+            customDashConfigs = customDashConfigs.filter(c => c.id !== id);
+            if (customChartInstances[id]) {
+                customChartInstances[id].destroy();
+                delete customChartInstances[id];
+            }
+            grid.removeWidget(document.querySelector(`[gs-id="${id}"]`));
+            updateCanvasMessage();
+        };
+
+        function addWidgetToGrid(config, layoutInfo) {
+            const widgetHtml = `
+                <div class="grid-stack-item shadow-sm border border-gray-200 bg-white rounded flex flex-col group overflow-hidden" gs-id="${config.id}" gs-w="${layoutInfo.w || 6}" gs-h="${layoutInfo.h || 3}" gs-x="${layoutInfo.x || 0}" gs-y="${layoutInfo.y || 0}">
+                    <div class="grid-stack-item-content flex flex-col h-full w-full">
+                        <div class="drag-handle cursor-move bg-gray-50 border-b border-gray-200 px-3 py-2 text-xs font-semibold text-center text-gray-700 relative shrink-0">
+                            ${config.title}
+                            <button class="absolute top-1/2 -translate-y-1/2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10" onclick="removeCustomChart('${config.id}')" title="Remove Chart">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="flex-1 relative w-full p-2 h-full">
+                            <canvas id="canvas_${config.id}"></canvas>
+                        </div>
+                    </div>
+                </div>
+            `;
+            grid.addWidget(widgetHtml);
+            renderChartJS(config);
+        }
+
+        function renderChartJS(config) {
+            if (customChartInstances[config.id]) {
+                customChartInstances[config.id].destroy();
+            }
+
+            if (currentData.length === 0) return; // Wait until data is loaded
+
+            // Aggregate Data
+            const aggregated = {};
+            currentData.forEach(row => {
+                const xVal = row[config.x_axis] || 'Unknown';
+                let yStr = String(row[config.y_axis]).replace(/[^0-9.-]+/g,"");
+                const yVal = parseFloat(yStr) || 0;
+                if (!aggregated[xVal]) aggregated[xVal] = 0;
+                aggregated[xVal] += yVal;
+            });
+
+            const labels = Object.keys(aggregated);
+            const values = Object.values(aggregated);
+
+            const canvas = document.getElementById(`canvas_${config.id}`);
+            if(!canvas) return; // Canvas not rendered yet
+
+            const bgColors = labels.map((_, i) => `hsl(${(i * 360) / labels.length}, 70%, 60%)`);
+            const borderColors = labels.map((_, i) => `hsl(${(i * 360) / labels.length}, 70%, 50%)`);
+            const isPieOrDoughnut = ['pie', 'doughnut'].includes(config.chart_type);
+
+            customChartInstances[config.id] = new Chart(canvas, {
+                type: config.chart_type,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `Sum of ${config.y_axis}`,
+                        data: values,
+                        backgroundColor: isPieOrDoughnut ? bgColors : 'rgba(59, 130, 246, 0.6)',
+                        borderColor: isPieOrDoughnut ? borderColors : 'rgb(37, 99, 235)',
+                        borderWidth: 1,
+                        fill: config.chart_type === 'line' ? false : true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, // Essential for GridStack resizing
+                    plugins: { legend: { display: isPieOrDoughnut, position: 'right' } },
+                    scales: isPieOrDoughnut ? {} : {
+                        y: { beginAtZero: true, title: { display: true, text: config.y_axis } },
+                        x: { title: { display: true, text: config.x_axis } }
+                    }
+                }
+            });
+        }
+
+        function rebuildCustomChartsContent() {
+            customDashConfigs.forEach(config => renderChartJS(config));
+        }
+
+        function updateCanvasMessage() {
+            if (customDashConfigs.length === 0) {
+                emptyCanvasMsg.classList.remove('hidden');
+                clearDashBtn.classList.add('hidden');
+            } else {
+                emptyCanvasMsg.classList.add('hidden');
+                clearDashBtn.classList.remove('hidden');
+            }
+        }
+
+        // --- Backend Save / Load Logic (Robust) ---
+        saveDashBtn.addEventListener('click', async () => {
+            if (customDashConfigs.length === 0) return alert("You don't have any charts to save!");
+            
+            // Get current layout state from GridStack
+            const layoutItems = grid.save();
+            
+            const payload = {
+                configs: customDashConfigs,
+                layout: layoutItems
+            };
+
+            const originalText = saveDashBtn.innerHTML;
+            saveDashBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+
+            try {
+                const res = await fetch('/save_layout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.ok) {
+                    saveDashBtn.innerHTML = '<i class="fa-solid fa-check"></i> Saved!';
+                    saveDashBtn.classList.replace('text-green-600', 'text-green-800');
+                } else {
+                    throw new Error("Failed response");
+                }
+            } catch (err) {
+                alert("Failed to save layout to server.");
+                saveDashBtn.innerHTML = originalText;
+            }
+
+            setTimeout(() => {
+                saveDashBtn.innerHTML = originalText;
+                saveDashBtn.classList.replace('text-green-800', 'text-green-600');
+            }, 2000);
+        });
+
+        loadDashBtn.addEventListener('click', async () => {
+            try {
+                const res = await fetch('/load_layout');
+                const saved = await res.json();
+                
+                if (saved && saved.configs && saved.layout) {
+                    // Clear existing
+                    grid.removeAll();
+                    Object.values(customChartInstances).forEach(inst => inst.destroy());
+                    customChartInstances = {};
+                    customDashConfigs = saved.configs;
+                    
+                    // Rebuild with saved layout information
+                    saved.configs.forEach(config => {
+                        const layoutItem = saved.layout.find(l => l.id === config.id);
+                        addWidgetToGrid(config, layoutItem || { w: 6, h: 3 });
+                    });
+                    
+                    updateCanvasMessage();
+
+                    if (currentData.length === 0) {
+                        alert("Layout loaded successfully! Please upload the corresponding dataset to see the actual chart visuals.");
+                    }
+                } else {
+                    alert("No saved dashboard layout found on the server.");
+                }
+            } catch(e) {
+                alert("Error loading saved dashboard config from server.");
+            }
+        });
+
+        // --- AI Chat Logic ---
+        function addChatBubble(sender, text) {
+            const wrap = document.createElement('div');
+            wrap.className = `flex ${sender === 'User' ? 'justify-end' : 'justify-start'}`;
+            const bubble = document.createElement('div');
+            bubble.className = `p-3 text-sm shadow-sm max-w-[85%] ${sender === 'User' ? 'chat-bubble-user' : 'chat-bubble-ai'}`;
+            let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+            bubble.innerHTML = formattedText;
+            wrap.appendChild(bubble);
+            chatHistory.appendChild(wrap);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        async function askAI(question) {
+            if (!dataSummaryContext) return alert("Please upload a dataset first.");
+            addChatBubble('User', question);
+            chatInput.value = '';
+            
+            const loadingWrap = document.createElement('div');
+            loadingWrap.className = 'flex justify-start text-gray-400 text-xs italic p-2';
+            loadingWrap.id = 'ai-typing';
+            loadingWrap.innerHTML = '<i class="fa-solid fa-ellipsis fa-fade text-lg"></i>';
+            chatHistory.appendChild(loadingWrap);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+
+            try {
+                const res = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question, context: dataSummaryContext })
+                });
+                const json = await res.json();
+                document.getElementById('ai-typing').remove();
+                addChatBubble('AI', json.answer || json.error);
+            } catch (err) {
+                document.getElementById('ai-typing').remove();
+                addChatBubble('AI', 'Connection Error: ' + err.message);
+            }
+        }
+
+        sendChatBtn.addEventListener('click', () => {
+            const q = chatInput.value.trim();
+            if (q) askAI(q);
+        });
+
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendChatBtn.click();
+        });
+
+        autoInsightBtn.addEventListener('click', () => {
+            askAI("Please provide 3 key insights or interesting patterns you notice in this dataset summary.");
+        });
+
+        // --- AI Dashboard Logic (4 Charts) ---
+        generateDashBtn.addEventListener('click', async () => {
+            if (!dataSummaryContext) return alert("Please upload a dataset first.");
+            
+            showLoading("AI is designing 4 insightful charts...");
+            aiDashboardContainer.classList.add('hidden');
+
+            try {
+                const res = await fetch('/generate_dashboard', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ context: dataSummaryContext })
+                });
+                const json = await res.json();
+                
+                if (json.charts && json.charts.length === 4) {
+                    aiDashboardContainer.classList.remove('hidden');
+                    aiChartInstances.forEach(inst => inst.destroy());
+                    aiChartInstances = [];
+
+                    renderAIChart(json.charts[0], 'aiChart1', 'aiChartTitle1');
+                    renderAIChart(json.charts[1], 'aiChart2', 'aiChartTitle2');
+                    renderAIChart(json.charts[2], 'aiChart3', 'aiChartTitle3');
+                    renderAIChart(json.charts[3], 'aiChart4', 'aiChartTitle4');
+                    
+                    addChatBubble('AI', 'I have generated a 4-chart custom dashboard below based on your dataset! Scroll down to view it.');
+                } else {
+                    alert(json.error || 'Failed to generate exactly 4 charts.');
+                }
+            } catch (err) {
+                alert('Error generating dashboard: ' + err.message);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        function renderAIChart(config, canvasId, titleId) {
+            const { chart_type, x_axis, y_axis, title } = config;
+            document.getElementById(titleId).innerText = title;
+
+            const aggregated = {};
+            currentData.forEach(row => {
+                const xVal = row[x_axis] || 'Unknown';
+                let yStr = String(row[y_axis]).replace(/[^0-9.-]+/g,"");
+                const yVal = parseFloat(yStr) || 0;
+                if (!aggregated[xVal]) aggregated[xVal] = 0;
+                aggregated[xVal] += yVal;
+            });
+
+            const labels = Object.keys(aggregated);
+            const values = Object.values(aggregated);
+
+            const bgColors = labels.map((_, i) => `hsl(${(i * 360) / labels.length}, 70%, 60%)`);
+            const borderColors = labels.map((_, i) => `hsl(${(i * 360) / labels.length}, 70%, 50%)`);
+            const isPieOrDoughnut = ['pie', 'doughnut'].includes(chart_type);
+
+            const canvas = document.getElementById(canvasId);
+            const newInstance = new Chart(canvas, {
+                type: chart_type,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `Sum of ${y_axis}`,
+                        data: values,
+                        backgroundColor: isPieOrDoughnut ? bgColors : 'rgba(147, 51, 234, 0.6)',
+                        borderColor: isPieOrDoughnut ? borderColors : 'rgb(126, 34, 206)',
+                        borderWidth: 1,
+                        fill: chart_type === 'line' ? false : true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: isPieOrDoughnut, position: 'right' } },
+                    scales: isPieOrDoughnut ? {} : {
+                        y: { beginAtZero: true, title: { display: true, text: y_axis } },
+                        x: { title: { display: true, text: x_axis } }
+                    }
+                }
+            });
+            
+            aiChartInstances.push(newInstance);
+        }
+
+        // --- Utils ---
+        function showLoading(text) {
+            loadingText.innerText = text;
+            loadingOverlay.classList.remove('hidden');
+        }
+        function hideLoading() {
+            loadingOverlay.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
