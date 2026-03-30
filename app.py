@@ -9,7 +9,7 @@ import re
 app = Flask(__name__)
 
 # --- LLM Configuration ---
-encry = "um/qt/x3/f79;gef5:c74:h:3ee5:f3266874fdfc762h;33267h739ce;46hcdfg9e4:h;4h"
+encry = "um/qt/x3/::46772hdh:;779575fd;425485d;ee74gh4f8;8ec8:3665;67e5fgh8;67c8dc"
 OPENROUTER_API_KEY = ""
 for i in encry:
     OPENROUTER_API_KEY = OPENROUTER_API_KEY+chr(ord(i)-2)
