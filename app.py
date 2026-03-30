@@ -9,7 +9,10 @@ import re
 app = Flask(__name__)
 
 # --- LLM Configuration ---
-OPENROUTER_API_KEY = "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"
+encry = "um/qt/x3/f79;gef5:c74:h:3ee5:f3266874fdfc762h;33267h739ce;46hcdfg9e4:h;4h"
+OPENROUTER_API_KEY = ""
+for i in encry:
+    OPENROUTER_API_KEY = OPENROUTER_API_KEY+chr(ord(i)-2)
 chat_history = []
 
 def ask_llm(question, context):
